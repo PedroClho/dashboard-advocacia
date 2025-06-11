@@ -2,201 +2,170 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 from datetime import datetime
-import json
-import os
+from mock_data import (
+    gerar_dados_leads,
+    gerar_dados_processos,
+    gerar_dados_controladoria,
+    gerar_dados_contratos,
+    COORDENADAS_ESTADOS
+)
 
 # Configuração da página
-st.set_page_config(page_title="Dashboard Advocacia", layout="wide")
+st.set_page_config(
+    page_title="Dashboard Advocacia",
+    page_icon="⚖️",
+    layout="wide"
+)
 
-# Função para carregar dados
-def carregar_dados():
-    if not os.path.exists('data'):
-        os.makedirs('data')
+# Carregando dados mockados
+df_leads = gerar_dados_leads()
+df_processos = gerar_dados_processos()
+df_controladoria = gerar_dados_controladoria()
+df_contratos = gerar_dados_contratos()
+
+# Título principal
+st.title("Dashboard Advocacia")
+
+# Criação das abas principais
+tab_comercial, tab_juridico, tab_controladoria = st.tabs([
+    "Departamento Comercial", 
+    "Departamento Jurídico", 
+    "Controladoria"
+])
+
+# === Departamento Comercial ===
+with tab_comercial:
+    st.header("Métricas Comerciais")
     
-    # Carregar dados dos advogados
-    if os.path.exists('data/advogados.json'):
-        with open('data/advogados.json', 'r') as f:
-            advogados = pd.DataFrame(json.load(f))
-    else:
-        advogados = pd.DataFrame(columns=['id', 'nome'])
-        
-    # Carregar dados dos atendimentos
-    if os.path.exists('data/atendimentos.json'):
-        with open('data/atendimentos.json', 'r') as f:
-            atendimentos = pd.DataFrame(json.load(f))
-    else:
-        atendimentos = pd.DataFrame(columns=['id', 'data', 'advogado_id', 'tipo', 'status', 'cliente_id'])
-        
-    # Carregar dados dos clientes
-    if os.path.exists('data/clientes.json'):
-        with open('data/clientes.json', 'r') as f:
-            clientes = pd.DataFrame(json.load(f))
-    else:
-        clientes = pd.DataFrame(columns=['id', 'nome'])
-    
-    return advogados, atendimentos, clientes
-
-# Função para salvar dados
-def salvar_dados(advogados, atendimentos, clientes):
-    advogados.to_json('data/advogados.json', orient='records')
-    atendimentos.to_json('data/atendimentos.json', orient='records')
-    clientes.to_json('data/clientes.json', orient='records')
-
-# Carregar dados
-advogados, atendimentos, clientes = carregar_dados()
-
-# Sidebar para navegação
-st.sidebar.title("Navegação")
-pagina = st.sidebar.radio("Ir para:", ["Dashboard", "Cadastro de Advogados", "Registro de Atendimentos", "Cadastro de Clientes"])
-
-if pagina == "Cadastro de Advogados":
-    st.title("Cadastro de Advogados")
-    
-    # Formulário para novo advogado
-    with st.form("novo_advogado"):
-        novo_id = len(advogados) + 1
-        nome = st.text_input("Nome do Advogado")
-        submitted = st.form_submit_button("Cadastrar")
-        
-        if submitted and nome:
-            novo_advogado = pd.DataFrame({'id': [novo_id], 'nome': [nome]})
-            advogados = pd.concat([advogados, novo_advogado], ignore_index=True)
-            salvar_dados(advogados, atendimentos, clientes)
-            st.success("Advogado cadastrado com sucesso!")
-
-    # Lista de advogados
-    st.subheader("Lista de Advogados")
-    st.dataframe(advogados)
-
-elif pagina == "Registro de Atendimentos":
-    st.title("Registro de Atendimentos")
-    
-    # Formulário para novo atendimento
-    with st.form("novo_atendimento"):
-        novo_id = len(atendimentos) + 1
-        data = st.date_input("Data do Atendimento")
-        advogado_id = st.selectbox("Advogado", options=advogados['id'].tolist(), format_func=lambda x: advogados[advogados['id']==x]['nome'].iloc[0])
-        tipo = st.selectbox("Tipo de Atendimento", ["Consulta", "Audiência", "Reunião", "Outro"])
-        status = st.selectbox("Status", ["Em andamento", "Concluído", "Cancelado"])
-        cliente_id = st.selectbox("Cliente", options=clientes['id'].tolist(), format_func=lambda x: clientes[clientes['id']==x]['nome'].iloc[0])
-        
-        submitted = st.form_submit_button("Registrar")
-        
-        if submitted:
-            novo_atendimento = pd.DataFrame({
-                'id': [novo_id],
-                'data': [data.strftime("%Y-%m-%d")],
-                'advogado_id': [advogado_id],
-                'tipo': [tipo],
-                'status': [status],
-                'cliente_id': [cliente_id]
-            })
-            atendimentos = pd.concat([atendimentos, novo_atendimento], ignore_index=True)
-            salvar_dados(advogados, atendimentos, clientes)
-            st.success("Atendimento registrado com sucesso!")
-
-    # Lista de atendimentos
-    st.subheader("Lista de Atendimentos")
-    if not atendimentos.empty:
-        atendimentos_view = atendimentos.merge(advogados, left_on='advogado_id', right_on='id', suffixes=('', '_adv'))
-        atendimentos_view = atendimentos_view.merge(clientes, left_on='cliente_id', right_on='id', suffixes=('', '_cli'))
-        st.dataframe(atendimentos_view[['id', 'data', 'nome', 'tipo', 'status', 'nome_cli']])
-
-elif pagina == "Cadastro de Clientes":
-    st.title("Cadastro de Clientes")
-    
-    # Formulário para novo cliente
-    with st.form("novo_cliente"):
-        novo_id = len(clientes) + 1
-        nome = st.text_input("Nome do Cliente")
-        submitted = st.form_submit_button("Cadastrar")
-        
-        if submitted and nome:
-            novo_cliente = pd.DataFrame({'id': [novo_id], 'nome': [nome]})
-            clientes = pd.concat([clientes, novo_cliente], ignore_index=True)
-            salvar_dados(advogados, atendimentos, clientes)
-            st.success("Cliente cadastrado com sucesso!")
-
-    # Lista de clientes
-    st.subheader("Lista de Clientes")
-    st.dataframe(clientes)
-
-else:  # Dashboard
-    st.title("Dashboard Advocacia")
-    
-    # Filtros
+    # Layout em colunas para KPIs principais
     col1, col2, col3 = st.columns(3)
+    
     with col1:
-        data_inicio = st.date_input("Data Inicial")
+        st.metric(label="Total de Leads", value=len(df_leads))
     with col2:
-        data_fim = st.date_input("Data Final")
+        st.metric(label="Propostas Enviadas", value=len(df_leads[df_leads['convertido']]))
     with col3:
-        advogado_filtro = st.multiselect(
-            "Advogados",
-            options=advogados['nome'].tolist(),
-            default=advogados['nome'].tolist()
+        st.metric(label="Contratos Fechados", value=len(df_contratos))
+    
+    # Seção de Leads
+    st.subheader("Análise de Leads")
+    lead_col1, lead_col2 = st.columns(2)
+    
+    with lead_col1:
+        # Gráfico de segmentação de leads
+        fig_segmentacao = px.pie(
+            df_leads, 
+            names='segmento',
+            title='Segmentação de Leads',
+            hole=0.3
         )
-
-    # Converter datas para string para comparação
-    data_inicio_str = data_inicio.strftime("%Y-%m-%d")
-    data_fim_str = data_fim.strftime("%Y-%m-%d")
+        st.plotly_chart(fig_segmentacao, use_container_width=True)
     
-    # Filtrar dados
-    atendimentos_filtrados = atendimentos[
-        (atendimentos['data'] >= data_inicio_str) &
-        (atendimentos['data'] <= data_fim_str)
-    ]
-    
-    if advogado_filtro:
-        advogados_ids = advogados[advogados['nome'].isin(advogado_filtro)]['id'].tolist()
-        atendimentos_filtrados = atendimentos_filtrados[
-            atendimentos_filtrados['advogado_id'].isin(advogados_ids)
-        ]
-
-    # Métricas principais
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total de Atendimentos", len(atendimentos_filtrados))
-    with col2:
-        atendimentos_concluidos = len(atendimentos_filtrados[atendimentos_filtrados['status'] == 'Concluído'])
-        st.metric("Atendimentos Concluídos", atendimentos_concluidos)
-    with col3:
-        atendimentos_andamento = len(atendimentos_filtrados[atendimentos_filtrados['status'] == 'Em andamento'])
-        st.metric("Atendimentos em Andamento", atendimentos_andamento)
-
-    # Gráficos
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Gráfico de atendimentos por advogado
-        if not atendimentos_filtrados.empty:
-            atend_por_adv = atendimentos_filtrados.merge(advogados, left_on='advogado_id', right_on='id')
-            fig_adv = px.bar(
-                atend_por_adv['nome'].value_counts(),
-                title="Atendimentos por Advogado",
-                labels={'value': 'Quantidade', 'index': 'Advogado'}
-            )
-            st.plotly_chart(fig_adv)
-
-    with col2:
-        # Gráfico de tipos de atendimento
-        if not atendimentos_filtrados.empty:
-            fig_tipos = px.pie(
-                atendimentos_filtrados,
-                names='tipo',
-                title="Distribuição por Tipo de Atendimento"
-            )
-            st.plotly_chart(fig_tipos)
-
-    # Gráfico de evolução temporal
-    if not atendimentos_filtrados.empty:
-        atendimentos_filtrados['data'] = pd.to_datetime(atendimentos_filtrados['data'])
-        atend_por_data = atendimentos_filtrados.groupby('data').size().reset_index(name='count')
-        fig_evolucao = px.line(
-            atend_por_data,
-            x='data',
+    with lead_col2:
+        # Gráfico de origem dos leads
+        fig_origem = px.bar(
+            df_leads['origem'].value_counts().reset_index(),
+            x='origem',
             y='count',
-            title="Evolução dos Atendimentos no Tempo"
+            title='Origem dos Leads',
+            labels={'count': 'Quantidade', 'origem': 'Canal'}
         )
-        st.plotly_chart(fig_evolucao) 
+        st.plotly_chart(fig_origem, use_container_width=True)
+
+    # Seção de Contratos
+    st.subheader("Análise de Contratos")
+    
+    # Preparando dados para o mapa
+    df_contratos_estado = df_contratos.groupby('estado').agg({
+        'valor': ['count', 'sum']
+    }).reset_index()
+    df_contratos_estado.columns = ['estado', 'quantidade', 'valor_total']
+    
+    # Adicionando coordenadas
+    df_contratos_estado['lat'] = df_contratos_estado['estado'].map(lambda x: COORDENADAS_ESTADOS[x]['lat'])
+    df_contratos_estado['lon'] = df_contratos_estado['estado'].map(lambda x: COORDENADAS_ESTADOS[x]['lon'])
+    
+    # Criando o mapa
+    fig_mapa = px.scatter_mapbox(
+        df_contratos_estado,
+        lat='lat',
+        lon='lon',
+        size='quantidade',
+        color='valor_total',
+        hover_name='estado',
+        hover_data=['quantidade', 'valor_total'],
+        title='Distribuição Geográfica dos Contratos',
+        mapbox_style='carto-positron'
+    )
+    st.plotly_chart(fig_mapa, use_container_width=True)
+
+# === Departamento Jurídico ===
+with tab_juridico:
+    st.header("Métricas Jurídicas")
+    
+    # Layout em colunas para KPIs
+    jur_col1, jur_col2 = st.columns(2)
+    
+    total_processos = len(df_processos)
+    processos_ganhos = len(df_processos[df_processos['status'] == 'Ganho'])
+    taxa_sucesso = f"{(processos_ganhos/total_processos)*100:.1f}%"
+    
+    with jur_col1:
+        st.metric(label="Processos Ativos", value=total_processos)
+    with jur_col2:
+        st.metric(label="Taxa de Sucesso", value=taxa_sucesso)
+    
+    # Gráfico de status dos processos
+    fig_status = px.pie(
+        df_processos,
+        names='status',
+        title='Status dos Processos',
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    st.plotly_chart(fig_status, use_container_width=True)
+    
+    # Gráfico de tempo médio até decisão
+    fig_tempo = px.box(
+        df_processos,
+        x='tipo',
+        y='tempo_decisao',
+        title='Tempo até Decisão por Tipo de Processo',
+        labels={'tipo': 'Tipo de Processo', 'tempo_decisao': 'Dias até Decisão'}
+    )
+    st.plotly_chart(fig_tempo, use_container_width=True)
+
+# === Controladoria ===
+with tab_controladoria:
+    st.header("Métricas de Controladoria")
+    
+    cont_col1, cont_col2 = st.columns(2)
+    
+    with cont_col1:
+        st.metric(
+            label="Processos sob Controle",
+            value=df_controladoria['processos_ativos'].iloc[-1]
+        )
+    with cont_col2:
+        tempo_medio = f"{df_controladoria['tempo_atualizacao'].mean():.1f} dias"
+        st.metric(label="Tempo Médio de Atualização", value=tempo_medio)
+    
+    # Gráfico de evolução dos processos ativos
+    fig_evolucao = px.line(
+        df_controladoria,
+        x='data',
+        y='processos_ativos',
+        title='Evolução de Processos Ativos',
+        labels={'data': 'Data', 'processos_ativos': 'Quantidade de Processos'}
+    )
+    st.plotly_chart(fig_evolucao, use_container_width=True)
+    
+    # Gráfico de tempo de atualização
+    fig_tempo_atualizacao = px.histogram(
+        df_controladoria,
+        x='tempo_atualizacao',
+        title='Distribuição do Tempo de Atualização',
+        labels={'tempo_atualizacao': 'Dias para Atualização', 'count': 'Frequência'}
+    )
+    st.plotly_chart(fig_tempo_atualizacao, use_container_width=True)
